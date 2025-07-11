@@ -21,6 +21,7 @@ export interface AlleAIError {
   };
   errors?: {
     audio_file?: string[];
+    models?: string[];
   };
 }
 
@@ -42,18 +43,22 @@ export class AlleAIService {
     try {
       const formData = new FormData();
       formData.append('audio_file', audioFile);
+      
+      // The models field is required according to the API error
       formData.append('models[]', 'whisper-1');
       
+      // Add language parameter back
       const language = process.env.ALLE_AI_LANGUAGE;
       if (language && language !== 'auto') {
         formData.append('language', language);
       }
       
-      formData.append('response_format', 'verbose_json');
+      // Try with text response format instead of verbose_json
+      formData.append('response_format', 'text');
 
       console.log(`🧠 Sending audio to Alle AI: ${audioFile.name} (${audioFile.size} bytes)`);
 
-      const response = await fetch(`${this.ENDPOINT}/audio/stt`, {
+      const response = await fetch(`${this.ENDPOINT}/api/${this.VERSION}/audio/stt`, {
         method: 'POST',
         headers: {
           'X-API-Key': this.API_KEY,
@@ -89,7 +94,11 @@ export class AlleAIService {
         } else if (response.status === 415) {
           throw new Error('Unsupported audio format. Please use MP3, WAV, M4A, MP4, or WebM.');
         } else if (response.status === 422) {
-          throw new Error('Audio file upload failed. The file may be corrupted or in an unsupported format.');
+          // Show the specific validation error from the API
+          const specificError = errorData.errors?.models?.[0] || 
+                               errorData.errors?.audio_file?.[0] || 
+                               'Validation error';
+          throw new Error(`API validation error: ${specificError}`);
         }
 
         const errorMessage = errorData.message || 
@@ -102,18 +111,28 @@ export class AlleAIService {
 
       const result = await response.json();
       console.log('✅ Alle AI transcription completed successfully');
+      console.log('📊 Raw API Response:', JSON.stringify(result, null, 2));
       
       let transcriptionText = '';
-      if (result.responses && result.responses.responses) {
+      
+      // Try different response formats
+      if (typeof result === 'string') {
+        // Direct text response
+        transcriptionText = result;
+      } else if (result.responses && result.responses.responses) {
         const modelResponses = result.responses.responses;
         transcriptionText = modelResponses['whisper-1'] || Object.values(modelResponses)[0] || '';
       } else if (result.text) {
         transcriptionText = result.text;
+      } else if (result.transcription) {
+        transcriptionText = result.transcription;
+      } else if (result.transcript) {
+        transcriptionText = result.transcript;
       }
       
-      if (transcriptionText === 'an error occurred') {
-        console.log('⚠️ Whisper returned error - likely due to short/silent audio or format issues');
-        transcriptionText = '';
+      if (transcriptionText === 'an error occurred' || transcriptionText === '') {
+        console.log('⚠️ Whisper returned error or empty result');
+        throw new Error('Audio processing failed: The audio file may be corrupted, too short, silent, or in an unsupported format. Please try with a different audio file or check that the audio contains clear speech.');
       }
       
       console.log('📊 Transcription result:', {
@@ -229,7 +248,7 @@ export class AlleAIService {
 
     try {
       // Test with a simple models endpoint or health check
-      const response = await fetch(`${this.ENDPOINT}/models`, {
+      const response = await fetch(`${this.ENDPOINT}/api/${this.VERSION}/models`, {
         method: 'GET',
         headers: {
           'X-API-Key': this.API_KEY,

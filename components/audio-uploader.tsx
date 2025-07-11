@@ -13,10 +13,11 @@ interface AudioUploaderProps {
     duration?: number;
   }) => void;
   onProcessingStart: () => void;
+  onError?: (error: string) => void;
   isProcessing: boolean;
 }
 
-export function AudioUploader({ onTranscriptionComplete, onProcessingStart, isProcessing }: AudioUploaderProps) {
+export function AudioUploader({ onTranscriptionComplete, onProcessingStart, onError, isProcessing }: AudioUploaderProps) {
   const [dragActive, setDragActive] = useState(false);
   const [error, setError] = useState<string>('');
   const [apiStatus, setApiStatus] = useState<{ connected: boolean; configured: boolean; checking: boolean }>({
@@ -37,7 +38,9 @@ export function AudioUploader({ onTranscriptionComplete, onProcessingStart, isPr
         });
         
         if (!status.configured || !status.connected) {
-          setError(status.error || 'API connection issue');
+          const errorMsg = status.error || 'API connection issue';
+          setError(errorMsg);
+          onError?.(errorMsg);
         }
       } catch {
         setApiStatus({ connected: false, configured: false, checking: false });
@@ -46,14 +49,16 @@ export function AudioUploader({ onTranscriptionComplete, onProcessingStart, isPr
     };
     
     checkAPI();
-  }, []);
+  }, [onError]);
 
   const handleFiles = async (files: FileList) => {
     const file = files[0];
     if (!file) return;
 
     if (!apiStatus.configured || !apiStatus.connected) {
-      setError('Alle AI API is not properly configured. Please check your environment variables.');
+      const errorMsg = 'Alle AI API is not properly configured. Please check your environment variables.';
+      setError(errorMsg);
+      onError?.(errorMsg);
       return;
     }
 
@@ -62,13 +67,17 @@ export function AudioUploader({ onTranscriptionComplete, onProcessingStart, isPr
     const clearlyNotAudio = fileExtension && ['txt', 'pdf', 'jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'zip', 'rar', 'tar', 'gz'].includes(fileExtension);
     
     if (clearlyNotAudio) {
-      setError(`File type .${fileExtension} is not supported. Please upload an audio file.`);
+      const errorMsg = `File type .${fileExtension} is not supported. Please upload an audio file.`;
+      setError(errorMsg);
+      onError?.(errorMsg);
       return;
     }
 
     const maxSize = 1000 * 1024 * 1024;
     if (file.size > maxSize) {
-      setError('File size must be less than 1GB');
+      const errorMsg = 'File size must be less than 1GB';
+      setError(errorMsg);
+      onError?.(errorMsg);
       return;
     }
 
@@ -100,6 +109,7 @@ export function AudioUploader({ onTranscriptionComplete, onProcessingStart, isPr
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to transcribe audio';
       setError(errorMessage);
+      onError?.(errorMessage);
       console.error('Transcription error:', err);
     }
   };

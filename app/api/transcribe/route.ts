@@ -37,6 +37,14 @@ export async function POST(request: NextRequest) {
 
     console.log(`📥 Processing audio file: ${file.name} (${file.size} bytes, ${file.type})`);
 
+    // Additional validation for very small files
+    if (file.size < 1000) { // Less than 1KB
+      return NextResponse.json({ 
+        error: 'Audio file too small',
+        details: 'The audio file appears to be too small to contain meaningful audio content. Please upload a larger audio file with clear speech.'
+      }, { status: 400 });
+    }
+
     try {
       const result = await AlleAIService.transcribeAudio(file);
       console.log(`✅ Transcription completed for: ${file.name}`);

@@ -4,13 +4,14 @@ import { useState } from 'react';
 import { AudioUploader } from '@/components/audio-uploader';
 import AudioRecorder from '@/components/audio-recorder';
 import { TranscriptionViewer } from '@/components/transcription-viewer';
-import { Mic, FileText, Brain, Trash2, Download, Upload } from 'lucide-react';
+import { Mic, FileText, Brain, Trash2, Download, Upload, X, AlertCircle } from 'lucide-react';
 
 export default function Home() {
   const [transcription, setTranscription] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [fileName, setFileName] = useState<string>('');
   const [inputMode, setInputMode] = useState<'upload' | 'record'>('upload');
+  const [error, setError] = useState<string>('');
   const [metadata, setMetadata] = useState<{
     confidence?: number;
     language?: string;
@@ -32,12 +33,14 @@ export default function Home() {
       duration: result.duration
     });
     setIsProcessing(false);
+    setError('');
   };
 
   const handleRecordingComplete = async (audioBlob: Blob, filename: string) => {
     setIsProcessing(true);
     setTranscription('');
     setFileName(filename);
+    setError('');
 
     try {
       const formData = new FormData();
@@ -49,7 +52,9 @@ export default function Home() {
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorData = await response.json();
+        const errorMessage = errorData.details || errorData.error || `Server error: ${response.status}`;
+        throw new Error(errorMessage);
       }
 
       const result = await response.json();
@@ -62,6 +67,8 @@ export default function Home() {
       });
     } catch (error) {
       console.error('Recording transcription error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to transcribe audio recording';
+      setError(errorMessage);
       setIsProcessing(false);
     }
   };
@@ -69,12 +76,23 @@ export default function Home() {
   const handleProcessingStart = () => {
     setIsProcessing(true);
     setTranscription('');
+    setError('');
+  };
+
+  const handleError = (errorMessage: string) => {
+    setError(errorMessage);
+    setIsProcessing(false);
   };
 
   const clearTranscription = () => {
     setTranscription('');
     setFileName('');
     setMetadata({});
+    setError('');
+  };
+
+  const clearError = () => {
+    setError('');
   };
 
   return (
@@ -94,6 +112,30 @@ export default function Home() {
             Transform your audio recordings into clean, readable text using advanced AI technology
           </p>
         </div>
+
+        {/* Error Notification */}
+        {error && (
+          <div className="bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-700 p-4 rounded-lg mb-8 max-w-2xl mx-auto">
+            <div className="flex items-start">
+              <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 mr-3 mt-0.5" />
+              <div className="flex-1">
+                <h3 className="text-sm font-medium text-red-800 dark:text-red-200 mb-1">
+                  Transcription Error
+                </h3>
+                <p className="text-sm text-red-700 dark:text-red-300">
+                  {error}
+                </p>
+              </div>
+              <button
+                onClick={clearError}
+                className="ml-3 text-red-400 hover:text-red-600 dark:text-red-300 dark:hover:text-red-100"
+                title="Dismiss error"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* How it works */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-12">
@@ -178,6 +220,7 @@ export default function Home() {
                 <AudioUploader
                   onTranscriptionComplete={handleTranscriptionComplete}
                   onProcessingStart={handleProcessingStart}
+                  onError={handleError}
                   isProcessing={isProcessing}
                 />
               </div>
@@ -212,6 +255,22 @@ export default function Home() {
                 </button>
               )}
             </div>
+            {error ? (
+              <div className="bg-red-50 dark:bg-red-900 p-4 rounded-lg mb-4 flex items-center">
+                <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 mr-3" />
+                <div className="flex-1">
+                  <p className="text-red-800 dark:text-red-300 font-semibold mb-1">Transcription Error</p>
+                  <p className="text-sm text-red-700 dark:text-red-200">{error}</p>
+                </div>
+                <button
+                  onClick={clearError}
+                  className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition-colors"
+                  title="Dismiss error"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            ) : null}
             <TranscriptionViewer
               transcription={transcription}
               fileName={fileName}
