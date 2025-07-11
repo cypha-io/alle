@@ -33,7 +33,6 @@ export default function AudioRecorder({ onRecordingComplete, isProcessing }: Aud
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Check microphone permission on component mount
   useEffect(() => {
     const handleCleanup = () => {
       if (timerRef.current) {
@@ -116,7 +115,6 @@ export default function AudioRecorder({ onRecordingComplete, isProcessing }: Aud
       streamRef.current = stream;
       chunksRef.current = [];
 
-      // Try different audio formats in order of preference
       let mimeType = 'audio/webm;codecs=opus';
       if (MediaRecorder.isTypeSupported('audio/mp4')) {
         mimeType = 'audio/mp4';
@@ -164,7 +162,7 @@ export default function AudioRecorder({ onRecordingComplete, isProcessing }: Aud
         streamRef.current = null;
       };
 
-      mediaRecorder.start(1000); // Collect data every second
+      mediaRecorder.start(1000);
       
       setRecordingState(prev => ({
         ...prev,
@@ -233,12 +231,6 @@ export default function AudioRecorder({ onRecordingComplete, isProcessing }: Aud
 
   const uploadRecording = () => {
     if (recordingState.audioBlob) {
-      // Check minimum duration (at least 1 second)
-      if (recordingState.duration < 1) {
-        setError('Recording too short. Please record for at least 1 second.');
-        return;
-      }
-
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const fileExtension = recordingState.audioBlob.type.includes('mp4') ? 'mp4' : 
                            recordingState.audioBlob.type.includes('webm') ? 'webm' : 'audio';
@@ -252,7 +244,7 @@ export default function AudioRecorder({ onRecordingComplete, isProcessing }: Aud
       });
       
       onRecordingComplete(recordingState.audioBlob, filename);
-      deleteRecording(); // Clear after upload
+      deleteRecording();
     }
   };
 

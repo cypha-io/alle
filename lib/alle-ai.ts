@@ -1,6 +1,3 @@
-// Real Alle AI API service integration
-// This service handles actual communication with Alle AI API
-
 export interface TranscriptionResult {
   transcription: string;
   confidence?: number;
@@ -16,8 +13,15 @@ export interface TranscriptionResult {
 
 export interface AlleAIError {
   code: string;
-  message: string;
+  message?: string;
   details?: unknown;
+  error?: {
+    code: number;
+    message: string;
+  };
+  errors?: {
+    audio_file?: string[];
+  };
 }
 
 export class AlleAIService {
@@ -36,12 +40,10 @@ export class AlleAIService {
     }
 
     try {
-      // Prepare form data for multipart upload
       const formData = new FormData();
-      formData.append('audio_file', audioFile); // Use 'audio_file' instead of 'file'
-      formData.append('models[]', 'whisper-1'); // Models must be an array using models[]
+      formData.append('audio_file', audioFile);
+      formData.append('models[]', 'whisper-1');
       
-      // Add optional parameters
       const language = process.env.ALLE_AI_LANGUAGE;
       if (language && language !== 'auto') {
         formData.append('language', language);
@@ -51,13 +53,11 @@ export class AlleAIService {
 
       console.log(`🧠 Sending audio to Alle AI: ${audioFile.name} (${audioFile.size} bytes)`);
 
-      // Make API request to Alle AI transcription endpoint
       const response = await fetch(`${this.ENDPOINT}/audio/stt`, {
         method: 'POST',
         headers: {
           'X-API-Key': this.API_KEY,
           'User-Agent': 'AI-Notetaker/1.0',
-          // Note: Don't set Content-Type for FormData, let the browser set it
         },
         body: formData,
         signal: AbortSignal.timeout(this.TIMEOUT),
@@ -80,33 +80,37 @@ export class AlleAIService {
           };
         }
 
-        // Handle specific error cases
         if (response.status === 401) {
           throw new Error('Invalid API key. Please check your ALLE_AI_API_KEY.');
+        } else if (response.status === 402) {
+          throw new Error('Insufficient API credits. Please top up your Alle AI account to continue.');
         } else if (response.status === 413) {
           throw new Error('File too large. Please try with a smaller audio file.');
         } else if (response.status === 415) {
           throw new Error('Unsupported audio format. Please use MP3, WAV, M4A, MP4, or WebM.');
+        } else if (response.status === 422) {
+          throw new Error('Audio file upload failed. The file may be corrupted or in an unsupported format.');
         }
 
-        throw new Error(`Alle AI API error: ${errorData.message}`);
+        const errorMessage = errorData.message || 
+                            errorData.error?.message || 
+                            errorData.errors?.audio_file?.[0] || 
+                            'Unknown error';
+        
+        throw new Error(`Alle AI API error: ${errorMessage}`);
       }
 
       const result = await response.json();
       console.log('✅ Alle AI transcription completed successfully');
       
-      // Extract transcription from Alle AI's response format
       let transcriptionText = '';
       if (result.responses && result.responses.responses) {
-        // Get transcription from the model response (e.g., whisper-1)
         const modelResponses = result.responses.responses;
         transcriptionText = modelResponses['whisper-1'] || Object.values(modelResponses)[0] || '';
       } else if (result.text) {
-        // Fallback to direct text field
         transcriptionText = result.text;
       }
       
-      // Handle Whisper errors
       if (transcriptionText === 'an error occurred') {
         console.log('⚠️ Whisper returned error - likely due to short/silent audio or format issues');
         transcriptionText = '';
@@ -119,7 +123,6 @@ export class AlleAIService {
         duration: result.duration
       });
 
-      // Transform Alle AI response to our format
       return {
         transcription: transcriptionText || '',
         confidence: this.calculateAverageConfidence(result.segments),

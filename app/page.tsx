@@ -63,7 +63,6 @@ export default function Home() {
     } catch (error) {
       console.error('Recording transcription error:', error);
       setIsProcessing(false);
-      // You might want to show an error message to the user here
     }
   };
 

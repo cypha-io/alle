@@ -3,13 +3,11 @@ import { AlleAIService } from '@/lib/alle-ai';
 
 export async function POST(request: NextRequest) {
   try {
-    // Check if API is properly configured
     const apiKey = process.env.ALLE_AI_API_KEY;
-    const endpoint = process.env.ALLE_AI_ENDPOINT;
     
-    if (!apiKey || !endpoint) {
+    if (!apiKey) {
       return NextResponse.json({ 
-        error: 'Alle AI API is not configured. Please set ALLE_AI_API_KEY and ALLE_AI_ENDPOINT environment variables.' 
+        error: 'Alle AI API is not configured. Please set ALLE_AI_API_KEY environment variable.' 
       }, { status: 500 });
     }
 
@@ -20,36 +18,29 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No audio file provided' }, { status: 400 });
     }
 
-    // Validate file size (50MB max)
-    const maxSize = parseInt(process.env.MAX_FILE_SIZE_MB || '50') * 1024 * 1024;
+    const maxSize = parseInt(process.env.MAX_FILE_SIZE_MB || '1000') * 1024 * 1024;
     if (file.size > maxSize) {
       return NextResponse.json({ 
         error: `File size must be less than ${Math.round(maxSize / 1024 / 1024)}MB` 
       }, { status: 400 });
     }
 
-    // Validate file type
-    const supportedFormats = (process.env.SUPPORTED_FORMATS || 'mp3,wav,m4a,mp4,webm').split(',');
     const fileExtension = file.name.split('.').pop()?.toLowerCase();
-    const mimeTypeParts = file.type.split('/');
-    const mimeSubtype = mimeTypeParts[1]?.toLowerCase();
     
-    if (!fileExtension || !supportedFormats.includes(fileExtension)) {
-      if (!mimeSubtype || !supportedFormats.includes(mimeSubtype)) {
-        return NextResponse.json({ 
-          error: `Invalid file type. Please upload one of: ${supportedFormats.join(', ').toUpperCase()}` 
-        }, { status: 400 });
-      }
+    const clearlyNotAudio = fileExtension && ['txt', 'pdf', 'jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'zip', 'rar', 'tar', 'gz'].includes(fileExtension);
+    
+    if (clearlyNotAudio) {
+      return NextResponse.json({ 
+        error: `File type .${fileExtension} is not supported. Please upload an audio file.` 
+      }, { status: 400 });
     }
 
     console.log(`📥 Processing audio file: ${file.name} (${file.size} bytes, ${file.type})`);
 
     try {
-      // Step 3: Process with Alle AI directly (no temporary file needed)
       const result = await AlleAIService.transcribeAudio(file);
       console.log(`✅ Transcription completed for: ${file.name}`);
 
-      // Step 4: Return transcription with metadata
       return NextResponse.json({
         transcription: result.transcription,
         fileName: file.name,
@@ -64,7 +55,13 @@ export async function POST(request: NextRequest) {
       console.error('❌ Alle AI processing error:', processingError);
       
       if (processingError instanceof Error) {
-        // Handle specific API errors
+        if (processingError.message.includes('Insufficient API credits')) {
+          return NextResponse.json({ 
+            error: 'Insufficient API credits',
+            details: 'Your Alle AI account needs to be topped up. Please add credits to continue using the transcription service.'
+          }, { status: 402 });
+        }
+        
         if (processingError.message.includes('timeout')) {
           return NextResponse.json({ 
             error: 'Processing timeout. Please try with a shorter audio file.',
@@ -85,6 +82,11 @@ export async function POST(request: NextRequest) {
             details: 'Please check your Alle AI API configuration'
           }, { status: 500 });
         }
+        
+        return NextResponse.json({ 
+          error: processingError.message,
+          details: 'Please check your audio file and try again.'
+        }, { status: 502 });
       }
       
       throw processingError;
@@ -108,5 +110,5 @@ export const config = {
     bodyParser: false,
     responseLimit: false,
   },
-  maxDuration: 60, // 60 seconds max execution time
+  maxDuration: 300, // 300 seconds (5 minutes) max execution time for large files
 };

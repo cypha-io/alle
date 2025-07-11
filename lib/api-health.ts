@@ -1,5 +1,3 @@
-// API health check and configuration validation utilities
-
 export interface APIStatus {
   connected: boolean;
   configured: boolean;

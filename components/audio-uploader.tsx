@@ -26,7 +26,6 @@ export function AudioUploader({ onTranscriptionComplete, onProcessingStart, isPr
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Check API health on component mount
   useEffect(() => {
     const checkAPI = async () => {
       try {
@@ -53,28 +52,23 @@ export function AudioUploader({ onTranscriptionComplete, onProcessingStart, isPr
     const file = files[0];
     if (!file) return;
 
-    // Check API status before processing
     if (!apiStatus.configured || !apiStatus.connected) {
       setError('Alle AI API is not properly configured. Please check your environment variables.');
       return;
     }
 
-    // Validate file type
-    const allowedExtensions = ['mp3', 'wav', 'm4a', 'mp4', 'webm'];
     const fileExtension = file.name.split('.').pop()?.toLowerCase();
-    const allowedMimeTypes = ['audio/mp3', 'audio/wav', 'audio/m4a', 'audio/mp4', 'audio/mpeg', 'audio/webm'];
     
-    if (!fileExtension || !allowedExtensions.includes(fileExtension)) {
-      if (!allowedMimeTypes.includes(file.type)) {
-        setError('Please upload a valid audio file (MP3, WAV, M4A, MP4, WebM)');
-        return;
-      }
+    const clearlyNotAudio = fileExtension && ['txt', 'pdf', 'jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'zip', 'rar', 'tar', 'gz'].includes(fileExtension);
+    
+    if (clearlyNotAudio) {
+      setError(`File type .${fileExtension} is not supported. Please upload an audio file.`);
+      return;
     }
 
-    // Validate file size (50MB max)
-    const maxSize = 50 * 1024 * 1024;
+    const maxSize = 1000 * 1024 * 1024;
     if (file.size > maxSize) {
-      setError('File size must be less than 50MB');
+      setError('File size must be less than 1GB');
       return;
     }
 
@@ -179,7 +173,7 @@ export function AudioUploader({ onTranscriptionComplete, onProcessingStart, isPr
         <input
           ref={fileInputRef}
           type="file"
-          accept="audio/*"
+          accept="audio/*,video/*,.mp3,.wav,.m4a,.mp4,.webm,.ogg,.aac,.flac,.opus,.3gp,.amr,.wma,.ac3,.aiff,.au,.caf,.dts,.mka,.mpc,.ra,.tta,.voc,.wv,.spx,.gsm"
           onChange={handleChange}
           className="hidden"
           disabled={isProcessing}
@@ -209,13 +203,12 @@ export function AudioUploader({ onTranscriptionComplete, onProcessingStart, isPr
               {dragActive ? 'Drop your audio file here' : 'Upload Audio File'}
             </h3>
             <p className="text-gray-600 dark:text-gray-300 mb-4">
-              Drag and drop your audio file or click to browse
+              Drag and drop your audio file or click to browse. Accepts any audio format!
             </p>
             <div className="flex flex-wrap gap-2 text-sm text-gray-500 dark:text-gray-400">
-              <span className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">MP3</span>
-              <span className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">WAV</span>
-              <span className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">M4A</span>
-              <span className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">Max 50MB</span>
+              <span className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">Any Audio Format</span>
+              <span className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">Any Length</span>
+              <span className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">Up to 1GB</span>
             </div>
           </div>
         )}

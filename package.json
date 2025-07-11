@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@types/multer": "^2.0.0",
+    "alle-ai-sdk": "^2.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "formdata-node": "^6.0.3",
